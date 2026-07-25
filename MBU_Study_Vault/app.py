@@ -1,24 +1,53 @@
 """
 MBU Study Vault - AI Powered Notes & Question Paper Repository
 ----------------------------------------------------------------
-A beginner-friendly mini project built with Streamlit + SQLite + NLTK.
+A beginner-friendly mini project built with Streamlit + Supabase + NLTK.
 
 Run with:
     streamlit run app.py
 
 Everything (UI, database, authentication, upload, NLP search) lives
 in this single file on purpose, to keep the project simple.
+
+Environment variables required (set these before running):
+    SUPABASE_URL   -> your Supabase project URL
+    SUPABASE_KEY   -> your Supabase service_role or anon API key
+
+Expected Supabase setup (create these once in your Supabase project):
+
+    Table: users
+        id             bigint, primary key, identity
+        full_name      text, not null
+        email          text, unique, not null
+        password_hash  text, not null
+        created_at     text, not null
+
+    Table: files
+        id               bigint, primary key, identity
+        course           text, not null
+        semester         text, not null
+        subject          text, not null
+        category         text, not null
+        display_name     text, not null
+        stored_filename  text, not null   (path inside the storage bucket)
+        keywords         text
+        uploaded_by      text
+        upload_date      text, not null
+
+    Storage bucket: uploads
+        A bucket named "uploads" (can be public or private - the app
+        downloads files through the Supabase SDK either way).
 """
 
 import os
 import re
 import uuid
 import hashlib
-import sqlite3
 from datetime import datetime
 
 import streamlit as st
 import nltk
+from supabase import create_client
 
 # ======================================================================
 # 1. PAGE CONFIG (must be the very first Streamlit command)
@@ -28,21 +57,18 @@ st.set_page_config(
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded",
-   )
-import os
-
+)
 
 # ======================================================================
 # 2. CONSTANTS & PATHS
 # ======================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
-DB_PATH = os.path.join(BASE_DIR, "studyvault.db")
-UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
 # NOTE: Drop your official MBU logo file (named exactly "mbu_logo.png")
 # into this same folder later. Until then, a gold placeholder badge is shown.
+LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
 
+STORAGE_BUCKET = "uploads"
 
 COURSES = {
     "MCA": [f"Semester {i}" for i in range(1, 5)],
@@ -133,53 +159,24 @@ def get_keywords(text):
 
 
 # ======================================================================
-# 4. DATABASE (SQLite) - created automatically if it does not exist
+# 4. SUPABASE CLIENT SETUP
 # ======================================================================
-def get_connection():
-    conn = sqlite3.connect(DB_PATH, check_same_thread=False)
-    conn.row_factory = sqlite3.Row
-    return conn
+SUPABASE_URL = os.environ.get("SUPABASE_URL")
+SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
 
 
-def init_db():
-    os.makedirs(UPLOAD_DIR, exist_ok=True)
-    conn = get_connection()
-    cur = conn.cursor()
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            full_name TEXT NOT NULL,
-            email TEXT UNIQUE NOT NULL,
-            password_hash TEXT NOT NULL,
-            created_at TEXT NOT NULL
+@st.cache_resource
+def init_supabase():
+    if not SUPABASE_URL or not SUPABASE_KEY:
+        st.error(
+            "Missing Supabase configuration. Please set the SUPABASE_URL and "
+            "SUPABASE_KEY environment variables before running the app."
         )
-        """
-    )
-
-    cur.execute(
-        """
-        CREATE TABLE IF NOT EXISTS files (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            course TEXT NOT NULL,
-            semester TEXT NOT NULL,
-            subject TEXT NOT NULL,
-            category TEXT NOT NULL,
-            display_name TEXT NOT NULL,
-            stored_filename TEXT NOT NULL,
-            keywords TEXT,
-            uploaded_by TEXT,
-            upload_date TEXT NOT NULL
-        )
-        """
-    )
-
-    conn.commit()
-    conn.close()
+        st.stop()
+    return create_client(SUPABASE_URL, SUPABASE_KEY)
 
 
-init_db()
+supabase = init_supabase()
 
 
 # ======================================================================
@@ -190,99 +187,94 @@ def hash_password(password):
 
 
 def create_user(full_name, email, password):
-    conn = get_connection()
-    cur = conn.cursor()
+    """Insert a new user into the Supabase `users` table."""
+    email = email.lower().strip()
     try:
-        cur.execute(
-            "INSERT INTO users (full_name, email, password_hash, created_at) VALUES (?, ?, ?, ?)",
-            (
-                full_name.strip(),
-                email.lower().strip(),
-                hash_password(password),
-                datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            ),
+        existing = (
+            supabase.table("users")
+            .select("id")
+            .eq("email", email)
+            .execute()
         )
-        conn.commit()
+        if existing.data:
+            return False, "An account with this email already exists."
+
+        supabase.table("users").insert(
+            {
+                "full_name": full_name.strip(),
+                "email": email,
+                "password_hash": hash_password(password),
+                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            }
+        ).execute()
         return True, "Account created successfully! Please login."
-    except sqlite3.IntegrityError:
-        return False, "An account with this email already exists."
-    finally:
-        conn.close()
+    except Exception as e:
+        return False, f"Could not create account: {e}"
 
 
 def verify_user(email, password):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM users WHERE email = ?", (email.lower().strip(),))
-    user = cur.fetchone()
-    conn.close()
-    if user and user["password_hash"] == hash_password(password):
-        return dict(user)
+    """Verify email + hashed password against the Supabase `users` table."""
+    email = email.lower().strip()
+    try:
+        response = (
+            supabase.table("users")
+            .select("*")
+            .eq("email", email)
+            .execute()
+        )
+        if response.data:
+            user = response.data[0]
+            if user.get("password_hash") == hash_password(password):
+                return user
+    except Exception:
+        pass
     return None
 
 
 # ======================================================================
-# 6. FILE / SEARCH HELPERS
+# 6. FILE / SEARCH HELPERS (Supabase table `files` + Storage bucket)
 # ======================================================================
 def save_file_record(course, semester, subject, category, display_name, stored_filename, uploaded_by):
     keyword_source = f"{course} {semester} {subject} {category} {display_name}"
     keywords = " ".join(get_keywords(keyword_source))
 
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        """
-        INSERT INTO files
-            (course, semester, subject, category, display_name, stored_filename, keywords, uploaded_by, upload_date)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """,
-        (
-            course,
-            semester,
-            subject,
-            category,
-            display_name,
-            stored_filename,
-            keywords,
-            uploaded_by,
-            datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        ),
-    )
-    conn.commit()
-    conn.close()
+    supabase.table("files").insert(
+        {
+            "course": course,
+            "semester": semester,
+            "subject": subject,
+            "category": category,
+            "display_name": display_name,
+            "stored_filename": stored_filename,
+            "keywords": keywords,
+            "uploaded_by": uploaded_by,
+            "upload_date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        }
+    ).execute()
 
 
 def get_subjects(course, semester):
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute(
-        "SELECT DISTINCT subject FROM files WHERE course = ? AND semester = ? ORDER BY subject",
-        (course, semester),
+    response = (
+        supabase.table("files")
+        .select("subject")
+        .eq("course", course)
+        .eq("semester", semester)
+        .execute()
     )
-    rows = cur.fetchall()
-    conn.close()
-    return [row["subject"] for row in rows]
+    subjects = sorted({row["subject"] for row in response.data if row.get("subject")})
+    return subjects
 
 
 def get_files(course=None, semester=None, subject=None):
-    conn = get_connection()
-    cur = conn.cursor()
-    query = "SELECT * FROM files WHERE 1=1"
-    params = []
+    query = supabase.table("files").select("*")
     if course:
-        query += " AND course = ?"
-        params.append(course)
+        query = query.eq("course", course)
     if semester:
-        query += " AND semester = ?"
-        params.append(semester)
+        query = query.eq("semester", semester)
     if subject:
-        query += " AND subject = ?"
-        params.append(subject)
-    query += " ORDER BY upload_date DESC"
-    cur.execute(query, params)
-    rows = cur.fetchall()
-    conn.close()
-    return [dict(row) for row in rows]
+        query = query.eq("subject", subject)
+    response = query.order("upload_date", desc=True).execute()
+    return response.data or []
 
 
 def search_files(user_query):
@@ -299,11 +291,8 @@ def search_files(user_query):
     if not query_keywords:
         return []
 
-    conn = get_connection()
-    cur = conn.cursor()
-    cur.execute("SELECT * FROM files")
-    rows = [dict(row) for row in cur.fetchall()]
-    conn.close()
+    response = supabase.table("files").select("*").execute()
+    rows = response.data or []
 
     results = []
     for row in rows:
@@ -325,6 +314,34 @@ def search_files(user_query):
 
     results.sort(key=lambda r: r["match_score"], reverse=True)
     return results
+
+
+def upload_file_to_storage(uploaded_file):
+    """
+    Uploads the given Streamlit UploadedFile to the Supabase Storage
+    bucket "uploads" and returns the storage path to save as
+    `stored_filename` in the `files` table.
+    """
+    unique_name = f"{uuid.uuid4().hex}_{uploaded_file.name}"
+    file_bytes = uploaded_file.getvalue()
+
+    supabase.storage.from_(STORAGE_BUCKET).upload(
+        unique_name,
+        file_bytes,
+        {"content-type": "application/pdf"},
+    )
+    return unique_name
+
+
+def download_file_from_storage(stored_filename):
+    """
+    Downloads the raw bytes of a file from the Supabase Storage bucket.
+    Returns None if the file cannot be found/downloaded.
+    """
+    try:
+        return supabase.storage.from_(STORAGE_BUCKET).download(stored_filename)
+    except Exception:
+        return None
 
 
 # ======================================================================
@@ -551,7 +568,6 @@ def render_file_list(files):
         return
 
     for f in files:
-        file_path = os.path.join(UPLOAD_DIR, f["stored_filename"])
         c1, c2, c3 = st.columns([5, 2, 2])
 
         with c1:
@@ -572,19 +588,19 @@ def render_file_list(files):
                 unsafe_allow_html=True,
             )
         with c3:
-            if os.path.exists(file_path):
+            file_bytes = download_file_from_storage(f["stored_filename"])
+            if file_bytes:
                 download_name = f["display_name"]
                 if not download_name.lower().endswith(".pdf"):
                     download_name += ".pdf"
-                with open(file_path, "rb") as file_data:
-                    st.download_button(
-                        label="⬇ Download",
-                        data=file_data.read(),
-                        file_name=download_name,
-                        mime="application/pdf",
-                        key=f"download_{f['id']}",
-                        use_container_width=True,
-                    )
+                st.download_button(
+                    label="⬇ Download",
+                    data=file_bytes,
+                    file_name=download_name,
+                    mime="application/pdf",
+                    key=f"download_{f['id']}",
+                    use_container_width=True,
+                )
             else:
                 st.error("File missing on server")
 
@@ -598,6 +614,10 @@ def render_home():
     st.markdown('<div class="hero">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
+        if os.path.exists(LOGO_PATH):
+            st.image(LOGO_PATH, width=140)
+        else:
+            st.markdown('<div class="logo-placeholder-big">MBU</div>', unsafe_allow_html=True)
         st.markdown('<h1 class="hero-title">MBU Study Vault</h1>', unsafe_allow_html=True)
         st.markdown(
             '<p class="hero-sub">AI Powered Notes &amp; Question Paper Repository</p>',
@@ -803,24 +823,23 @@ def render_upload():
             if not subject or not display_name or uploaded_file is None:
                 st.error("Please fill all fields and choose a PDF file.")
             else:
-                unique_name = f"{uuid.uuid4().hex}_{uploaded_file.name}"
-                save_path = os.path.join(UPLOAD_DIR, unique_name)
-                with open(save_path, "wb") as out_file:
-                    out_file.write(uploaded_file.getbuffer())
-
-                save_file_record(
-                    course,
-                    semester,
-                    subject.strip(),
-                    category,
-                    display_name.strip(),
-                    unique_name,
-                    st.session_state.user["full_name"],
-                )
-                st.success(
-                    f"'{display_name}' uploaded successfully under "
-                    f"{course} - {semester} - {subject}!"
-                )
+                try:
+                    stored_filename = upload_file_to_storage(uploaded_file)
+                    save_file_record(
+                        course,
+                        semester,
+                        subject.strip(),
+                        category,
+                        display_name.strip(),
+                        stored_filename,
+                        st.session_state.user["full_name"],
+                    )
+                    st.success(
+                        f"'{display_name}' uploaded successfully under "
+                        f"{course} - {semester} - {subject}!"
+                    )
+                except Exception as e:
+                    st.error(f"Upload failed: {e}")
 
 
 def render_search():
