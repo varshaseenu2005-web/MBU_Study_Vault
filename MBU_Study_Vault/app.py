@@ -28,18 +28,21 @@ st.set_page_config(
     page_icon="📚",
     layout="wide",
     initial_sidebar_state="expanded",
-)
+   )
+import os
+
 
 # ======================================================================
 # 2. CONSTANTS & PATHS
 # ======================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
 DB_PATH = os.path.join(BASE_DIR, "studyvault.db")
 UPLOAD_DIR = os.path.join(BASE_DIR, "uploads")
 
 # NOTE: Drop your official MBU logo file (named exactly "mbu_logo.png")
 # into this same folder later. Until then, a gold placeholder badge is shown.
-LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
+
 
 COURSES = {
     "MCA": [f"Semester {i}" for i in range(1, 5)],
@@ -595,10 +598,6 @@ def render_home():
     st.markdown('<div class="hero">', unsafe_allow_html=True)
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, width=140)
-        else:
-            st.markdown('<div class="logo-placeholder-big">MBU</div>', unsafe_allow_html=True)
         st.markdown('<h1 class="hero-title">MBU Study Vault</h1>', unsafe_allow_html=True)
         st.markdown(
             '<p class="hero-sub">AI Powered Notes &amp; Question Paper Repository</p>',
