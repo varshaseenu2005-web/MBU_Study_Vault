@@ -70,6 +70,10 @@ LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
 
 STORAGE_BUCKET = "uploads"
 
+# The single administrator account. Logging in with this email unlocks
+# file-delete permissions in render_file_list().
+ADMIN_EMAIL = "varshaseenu2005@gmail.com"
+
 COURSES = {
     "MCA": [f"Semester {i}" for i in range(1, 5)],
     "BCA": [f"Semester {i}" for i in range(1, 7)],
@@ -344,6 +348,20 @@ def download_file_from_storage(stored_filename):
         return None
 
 
+def delete_file(file_id, stored_filename):
+    """
+    Admin-only action: removes the PDF from the Supabase Storage bucket
+    and deletes the matching row from the `files` table.
+    Caller (render_file_list) is responsible for checking admin rights.
+    """
+    try:
+        supabase.storage.from_(STORAGE_BUCKET).remove([stored_filename])
+        supabase.table("files").delete().eq("id", file_id).execute()
+        return True, "File deleted successfully."
+    except Exception as e:
+        return False, f"Could not delete file: {e}"
+
+
 # ======================================================================
 # 7. STYLING - Dark Maroon / Gold / White / Light Grey theme
 # ======================================================================
@@ -567,8 +585,17 @@ def render_file_list(files):
         st.info("No files found.")
         return
 
+    is_admin = (
+        st.session_state.logged_in
+        and st.session_state.user
+        and st.session_state.user.get("email", "").lower().strip() == ADMIN_EMAIL
+    )
+
     for f in files:
-        c1, c2, c3 = st.columns([5, 2, 2])
+        if is_admin:
+            c1, c2, c3, c4 = st.columns([5, 2, 2, 1])
+        else:
+            c1, c2, c3 = st.columns([5, 2, 2])
 
         with c1:
             st.markdown(
@@ -603,6 +630,16 @@ def render_file_list(files):
                 )
             else:
                 st.error("File missing on server")
+
+        if is_admin:
+            with c4:
+                if st.button("🗑", key=f"delete_{f['id']}", use_container_width=True):
+                    success, message = delete_file(f["id"], f["stored_filename"])
+                    if success:
+                        st.success(message)
+                        st.rerun()
+                    else:
+                        st.error(message)
 
         st.markdown("<hr class='file-divider'>", unsafe_allow_html=True)
 
