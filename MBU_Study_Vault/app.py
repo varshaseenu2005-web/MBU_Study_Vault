@@ -165,8 +165,12 @@ def get_keywords(text):
 # ======================================================================
 # 4. SUPABASE CLIENT SETUP
 # ======================================================================
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+try:
+    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except Exception:
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
 
 @st.cache_resource
@@ -749,6 +753,10 @@ def render_login():
             if user:
                 st.session_state.logged_in = True
                 st.session_state.user = user
+                st.write(st.session_state.user)
+                st.write("Admin Email:", ADMIN_EMAIL)
+                st.write("Logged in email:", user["email"])
+                st.write("Admin check:", user["email"].lower().strip() == ADMIN_EMAIL)
                 st.session_state.page = "Dashboard"
                 st.success(f"Welcome back, {user['full_name']}!")
                 st.rerun()
