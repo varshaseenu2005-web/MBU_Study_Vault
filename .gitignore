@@ -1,0 +1,20 @@
+# Database (auto-created by app.py, don't commit real student data)
+studyvault.db
+
+# Uploaded PDFs (auto-created folder, don't commit real uploads)
+uploads/*
+!uploads/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+venv/
+.venv/
+
+# NLTK downloaded data (auto-downloaded on first run)
+nltk_data/
+
+# OS / Editor
+.DS_Store
+.vscode/
+.streamlit/secrets.toml
