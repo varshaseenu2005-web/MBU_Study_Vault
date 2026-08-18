@@ -1,3 +1,13 @@
-streamlit>=1.32.0
-nltk>=3.8.1
-supabase>=2.7.4
+﻿streamlit
+supabase
+requests
+nltk
+pypdf
+python-docx
+pytesseract
+Pillow
+reportlab
+pdf2image
+scikit-learn
+networkx
+matplotlib
