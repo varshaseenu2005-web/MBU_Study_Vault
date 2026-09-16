@@ -91,6 +91,8 @@ Chat Companion / RAG features (Groq LLaMA 3.3 70B):
 
 import os
 import re
+import base64
+import mimetypes
 import io
 import json
 import uuid
@@ -177,7 +179,9 @@ st.set_page_config(
 # ======================================================================
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
+# Use the new clean MBU crest logo when available, with the original logo as fallback.
+LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo_clean.png")
+LEGACY_LOGO_PATH = os.path.join(BASE_DIR, "mbu_logo.png")
 
 STORAGE_BUCKET = "uploads"
 
@@ -700,132 +704,300 @@ def inject_css():
     st.markdown(
         """
         <style>
-        @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:wght@500;600;700&display=swap');
+
+        :root {
+            --ink: #1F3142;
+            --muted: #667482;
+            --navy: #244C6B;
+            --gold: #C69B3A;
+            --cream: #F7F3EA;
+            --paper: #FFFDF8;
+            --line: #E7DDCA;
+            --sage: #EAF2ED;
+            --sky: #EAF2F8;
+            --lavender: #F1ECF8;
+            --peach: #FAF0E8;
+        }
 
         html, body, [class*="css"] {
-            font-family: 'Poppins', sans-serif;
+            font-family: 'DM Sans', sans-serif;
         }
 
         .stApp {
-            background-color: #F4F2EF;
+            background:
+                radial-gradient(circle at 92% 7%, rgba(198,155,58,.10), transparent 24%),
+                linear-gradient(180deg, #FBF9F4 0%, #F6F2EA 100%);
+            color: var(--ink);
         }
 
         section[data-testid="stSidebar"] {
-            background-color: #4A0E0E;
+            background: linear-gradient(180deg, #F8F3E8 0%, #F2EBDD 100%);
+            border-right: 1px solid #E3D6BE;
         }
         section[data-testid="stSidebar"] * {
-            color: #F5EFE0 !important;
+            color: var(--ink) !important;
+        }
+        section[data-testid="stSidebar"] img {
+            max-height: 125px;
+            object-fit: contain;
+            margin: 6px auto 4px;
+        }
+        .sidebar-brand {
+            text-align: center;
+            color: var(--navy) !important;
+            font-size: 20px;
+            letter-spacing: .5px;
+            margin: 8px 0 14px;
+            font-weight: 700;
         }
         section[data-testid="stSidebar"] .stButton > button {
-            background-color: #6B1F1F;
-            color: #F5D57A !important;
-            border: 1px solid #D4AF37;
-            border-radius: 10px;
+            background: #28577A !important;
+            color: #FFFFFF !important;
+            border: 1px solid #D4AF37 !important;
+            border-radius: 12px;
             font-weight: 600;
-            margin-bottom: 6px;
+            margin-bottom: 7px;
             width: 100%;
-            transition: all 0.2s ease-in-out;
+            box-shadow: 0 2px 8px rgba(31,49,66,.06);
+            transition: all .18s ease;
         }
+
+        section[data-testid="stSidebar"] .stButton > button p,
+        section[data-testid="stSidebar"] .stButton > button span,
+        section[data-testid="stSidebar"] .stButton > button div {
+            color: #FFFFFF !important;
+        }
+
         section[data-testid="stSidebar"] .stButton > button:hover {
-            background-color: #D4AF37;
-            color: #4A0E0E !important;
-            transform: translateY(-2px);
+            background: #D4AF37 !important;
+            color: #172B3A !important;
+            border-color: #B68E2A !important;
+            transform: translateX(2px);
         }
 
-        .logo-placeholder {
-            width: 90px; height: 90px; border-radius: 50%;
-            background: linear-gradient(135deg, #D4AF37, #F5D57A);
-            color: #4A0E0E; font-weight: 700; font-size: 22px;
-            display: flex; align-items: center; justify-content: center;
-            margin: 10px auto; border: 3px solid #F5EFE0;
-        }
-        .logo-placeholder-big {
-            width: 130px; height: 130px; border-radius: 50%;
-            background: linear-gradient(135deg, #D4AF37, #F5D57A);
-            color: #4A0E0E; font-weight: 700; font-size: 32px;
-            display: flex; align-items: center; justify-content: center;
-            margin: 10px auto; border: 4px solid #4A0E0E;
+        section[data-testid="stSidebar"] .stButton > button:hover p,
+        section[data-testid="stSidebar"] .stButton > button:hover span,
+        section[data-testid="stSidebar"] .stButton > button:hover div {
+            color: #172B3A !important;
         }
 
-        .hero { text-align: center; padding: 6px 0 0 0; }
+        .hero {
+            position: relative;
+            overflow: hidden;
+            background:
+                linear-gradient(120deg, rgba(255,253,248,.98) 0%, rgba(250,247,238,.94) 53%, rgba(232,241,246,.86) 100%);
+            border: 1px solid var(--line);
+            border-radius: 30px;
+            padding: 44px 52px 40px;
+            margin: 8px 0 24px;
+            min-height: 360px;
+            box-shadow: 0 18px 42px rgba(31,49,66,.07);
+        }
+        .hero:before {
+            content: '';
+            position: absolute;
+            right: -90px;
+            top: -110px;
+            width: 320px;
+            height: 320px;
+            border-radius: 50%;
+            background: rgba(198,155,58,.10);
+        }
+        .hero:after {
+            content: '';
+            position: absolute;
+            left: 50%;
+            bottom: -150px;
+            width: 420px;
+            height: 250px;
+            transform: translateX(-50%);
+            border-radius: 50%;
+            border-top: 1px solid rgba(198,155,58,.25);
+            border-bottom: 1px solid rgba(198,155,58,.16);
+        }
+        .hero-inner {
+            position: relative;
+            z-index: 2;
+            max-width: 980px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        .hero-eyebrow {
+            color: var(--gold);
+            font-size: 14px;
+            font-weight: 700;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
         .hero-title {
-            color: #4A0E0E; font-size: 42px; font-weight: 700;
-            margin-bottom: 0px; text-align: center;
+            color: var(--ink);
+            font-family: 'Playfair Display', Georgia, serif;
+            font-size: clamp(34px, 4.4vw, 60px);
+            line-height: 1.06;
+            font-weight: 700;
+            margin: 0;
+        }
+        .hero-title .gold {
+            color: #9B7220;
+        }
+        .hero-brand-small {
+            color: var(--navy);
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: 6px;
+            margin-top: 16px;
+            text-transform: uppercase;
         }
         .hero-sub {
-            color: #B8860B; font-size: 18px; font-weight: 600;
-            text-align: center; margin-top: 0px;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.7;
+            margin: 16px auto 0;
+            max-width: 760px;
+        }
+        .hero-rule {
+            width: 72px;
+            height: 4px;
+            background: linear-gradient(90deg, var(--gold), #E4C779);
+            border-radius: 50px;
+            margin: 20px auto 0;
         }
 
         .welcome-card {
-            background: #FFFFFF; border-left: 6px solid #D4AF37;
-            border-radius: 14px; padding: 22px 28px; margin: 20px 0;
-            box-shadow: 0 4px 14px rgba(0,0,0,0.08); color: #333333;
+            background: rgba(255,255,255,.82);
+            border: 1px solid var(--line);
+            border-radius: 20px;
+            padding: 22px 26px;
+            margin: 10px 0 26px;
+            box-shadow: 0 10px 28px rgba(31,49,66,.055);
         }
-        .welcome-card h3 { color: #4A0E0E; margin-top: 0; }
+        .welcome-card h3 { color: var(--navy); margin-top: 0; }
+        .welcome-card p { color: #55616B; line-height: 1.75; }
 
         .feature-card {
-            background: #FFFFFF; border-radius: 16px; padding: 20px 14px;
-            text-align: center; box-shadow: 0 4px 12px rgba(0,0,0,0.07);
-            transition: transform 0.2s ease-in-out; min-height: 175px;
-            border-top: 4px solid #D4AF37;
+            min-height: 172px;
+            border-radius: 22px;
+            padding: 24px 20px;
+            border: 1px solid rgba(31,49,66,.07);
+            box-shadow: 0 10px 25px rgba(31,49,66,.055);
+            transition: transform .18s ease, box-shadow .18s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        .feature-card:after {
+            content: '';
+            position: absolute;
+            width: 88px;
+            height: 88px;
+            right: -20px;
+            bottom: -30px;
+            border-radius: 50%;
+            border: 1px solid rgba(198,155,58,.18);
         }
         .feature-card:hover {
-            transform: translateY(-6px);
-            box-shadow: 0 8px 20px rgba(0,0,0,0.12);
+            transform: translateY(-5px);
+            box-shadow: 0 16px 34px rgba(31,49,66,.095);
         }
-        .feature-icon { font-size: 30px; margin-bottom: 8px; }
-        .feature-title { font-weight: 700; color: #4A0E0E; margin-bottom: 6px; }
-        .feature-desc { font-size: 13px; color: #666666; }
+        .feature-icon { font-size: 30px; margin-bottom: 14px; }
+        .feature-title { font-weight: 700; color: var(--ink); font-size: 19px; margin-bottom: 8px; }
+        .feature-desc { font-size: 13px; line-height: 1.6; color: #5D6A74; }
+        .feature-card:nth-child(1) { background: var(--peach); }
+        .feature-card:nth-child(2) { background: var(--sky); }
+        .feature-card:nth-child(3) { background: var(--lavender); }
+        .feature-card:nth-child(4) { background: var(--sage); }
 
         .course-card {
-            background: linear-gradient(135deg, #4A0E0E, #6B1F1F);
-            border-radius: 16px; padding: 26px 10px; text-align: center;
-            color: #F5D57A; box-shadow: 0 4px 14px rgba(0,0,0,0.15);
-            margin-bottom: 6px; font-weight: 700;
+            background: linear-gradient(145deg, #FDFBF5 0%, #F2E9D6 100%);
+            border: 1px solid #E1D5BC;
+            border-radius: 22px;
+            padding: 34px 12px;
+            text-align: center;
+            color: var(--navy);
+            min-height: 145px;
+            box-shadow: 0 10px 24px rgba(31,49,66,.065);
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
         }
-        .course-icon { font-size: 26px; }
-        .course-title { font-size: 18px; margin-top: 6px; }
+        .course-link {
+            text-decoration: none !important;
+            color: inherit !important;
+            display: block;
+        }
+        .course-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--gold);
+            box-shadow: 0 15px 32px rgba(31,49,66,.10);
+        }
+        .course-icon { font-size: 32px; }
+        .course-title { font-size: 20px; margin-top: 8px; font-weight: 700; color: var(--navy); }
+
+        /* Direct-click course cards */
+        .course-card-wrap .stButton > button {
+            width: 100%;
+            min-height: 145px;
+            padding: 30px 12px;
+            border-radius: 22px;
+            border: 1px solid #E1D5BC;
+            background: linear-gradient(145deg, #FDFBF5 0%, #F2E9D6 100%);
+            color: var(--navy) !important;
+            box-shadow: 0 10px 24px rgba(31,49,66,.065);
+            font-size: 20px;
+            font-weight: 700;
+            transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+        }
+        .course-card-wrap .stButton > button:hover {
+            transform: translateY(-4px);
+            border-color: var(--gold);
+            box-shadow: 0 15px 32px rgba(31,49,66,.10);
+            background: linear-gradient(145deg, #FFFDF8 0%, #F4E8CD 100%);
+            color: var(--navy) !important;
+        }
+
+        .semester-card {
+            background: #FFFFFF;
+            border: 1px solid #E3D9C8;
+            border-radius: 15px;
+            padding: 10px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(31,49,66,.04);
+        }
 
         .subject-card {
-            background: #FFFFFF; border-radius: 12px; padding: 14px;
-            text-align: center; font-weight: 600; color: #4A0E0E;
-            border: 1px solid #E8E0D0; margin-bottom: 4px;
-            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            background: #FFFFFF; border-radius: 15px; padding: 14px;
+            text-align: center; font-weight: 600; color: var(--navy);
+            border: 1px solid #E6DECE; margin-bottom: 4px;
+            box-shadow: 0 5px 15px rgba(31,49,66,.045);
         }
 
         .file-row { padding: 8px 0; }
-        .file-name { font-weight: 600; color: #4A0E0E; font-size: 16px; }
-        .file-meta { color: #777777; font-size: 13px; margin-top: 2px; }
+        .file-name { font-weight: 600; color: var(--navy); font-size: 16px; }
+        .file-meta { color: #6F7980; font-size: 13px; margin-top: 2px; }
         .badge {
-            background: #D4AF37; color: #4A0E0E; padding: 2px 10px;
+            background: #F0E0B4; color: #5B481E; padding: 2px 10px;
             border-radius: 20px; font-size: 11px; font-weight: 700;
         }
-        .upload-date { color: #999999; font-size: 12px; padding-top: 14px; }
-        .file-divider { border: none; border-top: 1px solid #E4E0D8; margin: 4px 0 14px 0; }
+        .upload-date { color: #969A9E; font-size: 12px; padding-top: 14px; }
+        .file-divider { border: none; border-top: 1px solid #E8E1D4; margin: 4px 0 14px 0; }
 
         div.stButton > button:first-child {
-            background-color: #4A0E0E; color: #F5D57A;
-            border: 1px solid #D4AF37; border-radius: 10px; font-weight: 600;
+            background: var(--navy); color: #FFFFFF;
+            border: 1px solid var(--navy); border-radius: 11px; font-weight: 600;
         }
         div.stButton > button:first-child:hover {
-            background-color: #D4AF37; color: #4A0E0E; border: 1px solid #4A0E0E;
+            background: #315E7F; border-color: #315E7F; color: #FFFFFF;
         }
 
         .stDownloadButton > button {
-            background-color: #D4AF37 !important; color: #4A0E0E !important;
-            border: 1px solid #4A0E0E !important; border-radius: 10px; font-weight: 700;
+            background: #E8C96C !important; color: #1F3142 !important;
+            border: 1px solid #B28C32 !important; border-radius: 11px; font-weight: 700;
         }
         .stDownloadButton > button:hover {
-            background-color: #4A0E0E !important; color: #F5D57A !important;
+            background: #D7B24E !important; color: #1F3142 !important;
         }
 
-        .footer {
-            text-align: center; color: #999999; font-size: 12px;
-            padding: 30px 0 10px 0;
-        }
-
-        h1, h2, h3 { color: #4A0E0E; }
+        .footer { text-align: center; color: #94999D; font-size: 12px; padding: 30px 0 10px; }
+        h1, h2, h3 { color: var(--ink); }
         </style>
         """,
         unsafe_allow_html=True,
@@ -879,13 +1051,14 @@ if "companion_chat_history" not in st.session_state:
 # ======================================================================
 def sidebar_nav():
     with st.sidebar:
-        if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, use_container_width=True)
+        logo_to_use = LOGO_PATH if os.path.exists(LOGO_PATH) else LEGACY_LOGO_PATH
+        if os.path.exists(logo_to_use):
+            st.image(logo_to_use, use_container_width=True)
         else:
             st.markdown('<div class="logo-placeholder">MBU</div>', unsafe_allow_html=True)
 
         st.markdown(
-            "<h3 style='text-align:center;color:#D4AF37;'>Study Vault</h3>",
+            "<h3 class='sidebar-brand'>Study Vault</h3>",
             unsafe_allow_html=True,
         )
         st.markdown("---")
@@ -1050,31 +1223,34 @@ def render_file_list(files):
 # 11. PAGES
 # ======================================================================
 def render_home():
-    st.markdown('<div class="hero">', unsafe_allow_html=True)
-    col1, col2, col3 = st.columns([1, 2, 1])
-    with col2:
-        if os.path.exists(LOGO_PATH):
-            st.image(LOGO_PATH, width=140)
-        else:
-            st.markdown('<div class="logo-placeholder-big">MBU</div>', unsafe_allow_html=True)
-        st.markdown('<h1 class="hero-title">MBU Study Vault</h1>', unsafe_allow_html=True)
-        st.markdown(
-            '<p class="hero-sub">AI Powered Notes &amp; Question Paper Repository</p>',
-            unsafe_allow_html=True,
-        )
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        """
+        <div class="hero">
+          <div class="hero-inner">
+            <div class="hero-eyebrow">Mohan Babu University</div>
+            <h1 class="hero-title"><span class="gold">AI Powered</span> Notes &amp;<br>Question Paper Repository</h1>
+            <div class="hero-brand-small">MBU Study Vault</div>
+            <p class="hero-sub">
+              Your academic space to discover, share and access notes, study materials
+              and previous question papers — organized for MBU students.
+            </p>
+            <div class="hero-rule"></div>
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
     st.markdown(
         """
         <div class="welcome-card">
-        <h3>Welcome to MBU Study Vault 👋</h3>
-        <p>
-        No more endless scrolling through WhatsApp and Telegram groups looking for notes.
-        MBU Study Vault is a single place where Mohan Babu University students can
-        <b>upload</b>, <b>search</b>, <b>view</b> and <b>download</b> handwritten notes,
-        typed notes and previous question papers — organized by Course, Semester and
-        Subject, and powered by AI semantic search and a RAG-based Study Assistant.
-        </p>
+          <h3>Welcome to MBU Study Vault 👋</h3>
+          <p>
+            A single place where Mohan Babu University students can
+            <b>upload</b>, <b>search</b>, <b>view</b> and <b>download</b> handwritten notes,
+            typed notes and previous question papers — organized by Course, Semester and Subject,
+            with AI-powered study assistance.
+          </p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -1082,10 +1258,10 @@ def render_home():
 
     st.markdown("### Why MBU Study Vault?")
     features = [
-        ("📚", "Organized Material", "Notes and papers sorted by Course, Semester & Subject."),
-        ("🔍", "Smart Semantic Search", "Search by meaning, not just exact keywords."),
-        ("🤖", "RAG AI Assistant", "Ask questions answered from your repository's own content."),
-        ("⬇️", "Free Downloads", "Download any material with a single click."),
+        ("📚", "Materials", "Browse and download notes, study materials and question papers."),
+        ("🔍", "Search", "Find relevant study materials quickly with intelligent search."),
+        ("🤖", "AI Assistant", "Get study help using AI-powered assistance."),
+        ("⬇️", "Free Downloads", "Access useful materials shared by students and faculty."),
     ]
     cols = st.columns(4)
     for col, (icon, title, desc) in zip(cols, features):
@@ -1165,29 +1341,31 @@ def render_login():
 
 def render_dashboard():
     st.markdown("## 📂 Dashboard")
-    st.markdown("Select your **Course** to get started.")
+    st.markdown("Choose your **Course** to explore semesters and study materials.")
+
+    # Keep course selection inside the same Streamlit session.
+    # Using native Streamlit buttons avoids opening a new browser URL/session.
+    if st.query_params:
+        st.query_params.clear()
 
     course_cols = st.columns(len(COURSES))
     for col, course in zip(course_cols, COURSES.keys()):
         with col:
-            st.markdown(
-                f"""
-                <div class="course-card">
-                    <div class="course-icon">🎓</div>
-                    <div class="course-title">{course}</div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            if st.button(f"Select {course}", key=f"course_{course}", use_container_width=True):
+            st.markdown('<div class="course-card-wrap">', unsafe_allow_html=True)
+            if st.button(
+                f"🎓  {course}",
+                key=f"course_card_{course}",
+                use_container_width=True,
+            ):
                 st.session_state.selected_course = course
                 st.session_state.selected_semester = None
                 st.session_state.selected_subject = None
                 st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.selected_course:
         st.markdown("---")
-        st.markdown(f"### {st.session_state.selected_course} — Select Semester")
+        st.markdown(f"### {st.session_state.selected_course} — Semesters")
         semesters = COURSES[st.session_state.selected_course]
         sem_cols = st.columns(4)
         for i, sem in enumerate(semesters):
@@ -1203,7 +1381,10 @@ def render_dashboard():
             f"### {st.session_state.selected_course} — "
             f"{st.session_state.selected_semester} — Subjects"
         )
-        subjects = get_subjects(st.session_state.selected_course, st.session_state.selected_semester)
+        subjects = get_subjects(
+            st.session_state.selected_course,
+            st.session_state.selected_semester,
+        )
 
         if not subjects:
             st.info("No subjects uploaded yet for this semester. Be the first to upload!")
@@ -1214,8 +1395,15 @@ def render_dashboard():
             subj_cols = st.columns(3)
             for i, subject in enumerate(subjects):
                 with subj_cols[i % 3]:
-                    st.markdown(f'<div class="subject-card">📘 {subject}</div>', unsafe_allow_html=True)
-                    if st.button(f"View {subject}", key=f"subj_{subject}", use_container_width=True):
+                    st.markdown(
+                        f'<div class="subject-card">📘 {subject}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        f"View {subject}",
+                        key=f"subj_{subject}",
+                        use_container_width=True,
+                    ):
                         st.session_state.selected_subject = subject
                         st.rerun()
 
@@ -1271,9 +1459,8 @@ def render_upload():
             "🤖 Every file is automatically analyzed by our AI/NLP engine "
             "before upload. DOCX files are converted to PDF, images are "
             "OCR-scanned into searchable PDFs, and only genuine "
-            "educational material is accepted. Extracted text also powers "
-            "Semantic Search, the RAG AI Study Assistant and the "
-            "Knowledge Graph."
+            "educational material is accepted. Extracted text also supports "
+            "Search, the AI Study Assistant and the Knowledge Graph."
         )
 
         submitted = st.form_submit_button("Upload")
@@ -1315,12 +1502,7 @@ def render_upload():
 
 
 def render_search():
-    st.markdown("## 🔍 Semantic Search")
-    st.markdown(
-        "Search by **meaning**, not just exact words. Powered by TF-IDF "
-        "text similarity over every document's extracted content "
-        "(falls back to keyword search automatically if needed)."
-    )
+    st.markdown("## 🔍 Search")
 
     query = st.text_input(
         "Search by topic or question — e.g. \"Explain TCP congestion control\""
@@ -2667,7 +2849,7 @@ def render_ai_ask_questions_tool():
     st.markdown("### 💬 AI Ask Questions")
     mode = st.radio(
         "Where should I look for the answer?",
-        ["Upload a specific file", "Search the whole repository (RAG)"],
+        ["Upload a specific file", "Search the whole repository"],
         key="ask_mode",
     )
 
