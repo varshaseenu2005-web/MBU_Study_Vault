@@ -1,0 +1,13 @@
+﻿streamlit
+supabase
+requests
+nltk
+pypdf
+python-docx
+pytesseract
+Pillow
+reportlab
+pdf2image
+scikit-learn
+networkx
+matplotlib
