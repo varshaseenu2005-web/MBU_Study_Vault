@@ -1,5 +1,5 @@
 """
-MBU Study Vault - AI Powered Notes & Question Paper Repository
+MBU Study Vault - Intelligent Academic Knowledge Repository
 ----------------------------------------------------------------
 A beginner-friendly mini project built with Streamlit + Supabase + NLTK.
 
@@ -1228,7 +1228,7 @@ def render_home():
         <div class="hero">
           <div class="hero-inner">
             <div class="hero-eyebrow">Mohan Babu University</div>
-            <h1 class="hero-title"><span class="gold">AI Powered</span> Notes &amp;<br>Question Paper Repository</h1>
+            <h1 class="hero-title"><span class="gold">Intelligent</span> Academic Knowledge Repository</h1>
             <div class="hero-brand-small">MBU Study Vault</div>
             <p class="hero-sub">
               Your academic space to discover, share and access notes, study materials
